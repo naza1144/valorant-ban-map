@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Valorant Map Ban</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>VALORANT <span>MAP BAN</span></h1>
+  </header>
+
+  <section id="setup" class="panel">
+    <h2>ตั้งค่า</h2>
+    <div class="row">
+      <label>ทีม A <input id="teamA" value="Team A"></label>
+      <label>ทีม B <input id="teamB" value="Team B"></label>
+    </div>
+    <p class="hint">เลือกแมพที่อยู่ใน Map Pool (คลิกเพื่อเปิด/ปิด) — ต้องเลือก 7 แมพพอดี (ban 2 → pick 2 → ban 2 → เหลือ 1 แมพ = เล่น 3 แมพ)</p>
+    <div id="poolPicker" class="pool-picker"></div>
+    <button id="startBtn" class="primary">เริ่ม Ban/Pick</button>
+  </section>
+
+  <section id="game" class="hidden">
+    <div id="status" class="status"></div>
+    <div id="maps" class="maps"></div>
+    <div class="controls">
+      <button id="undoBtn">↶ ย้อนกลับ</button>
+      <button id="resetBtn">⟲ เริ่มใหม่</button>
+    </div>
+    <div id="result" class="panel hidden"></div>
+    <div id="log" class="log"></div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
