@@ -70,7 +70,15 @@ function applyBlock_(sheet, block, maps) {
 
 function readBlocks_(sheet) {
   const lastRow = Math.max(sheet.getLastRow(), 1);
-  return findBlocks_(sheet.getRange(1, 1, lastRow, 16).getValues());
+  const blocks = findBlocks_(sheet.getRange(1, 1, lastRow, 16).getValues());
+  // ทำเครื่องหมายแมตช์ที่มีข้อมูลแมพอยู่แล้ว (สีแดง/เขียว หรือมีลำดับ/ทีมเจ้าของ) เพื่อเตือนกรรมการก่อนเขียนทับ
+  blocks.forEach((b) => {
+    const rng = sheet.getRange(b.headerRow, COL_MAP_FIRST, 4, MAP_COUNT);
+    const bg = rng.getBackgrounds()[0], vals = rng.getValues();
+    b.used = bg.some((c) => c === RED || c === GREEN) ||
+      [1, 2, 3].some((r) => vals[r].some((x) => String(x).trim() !== ''));
+  });
+  return blocks;
 }
 
 function json_(obj) {

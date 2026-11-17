@@ -58,7 +58,11 @@ function start() {
     seq, step: 0, history: [], pendingSide: null,
     sheet: sheetTarget(),
   };
-  if (state.sheet && !confirm(`จะเขียนทับข้อมูลแมพของแมตช์ ${state.sheet.match} (${state.sheet.date}) ในชีต ต้องการต่อหรือไม่?`)) { state = null; return; }
+  if (state.sheet) {
+    const used = (sheetMatches.find((x) => x.id === state.sheet.match) || {}).used;
+    const warn = used ? "แมตช์นี้มีข้อมูลแมพในชีตอยู่แล้ว และจะถูกเขียนทับ" : "จะเขียนข้อมูลแมพลงชีต";
+    if (!confirm(`${warn}\nแมตช์ ${state.sheet.match} (${state.sheet.date}) ต้องการต่อหรือไม่?`)) { state = null; return; }
+  }
   $("setup").classList.add("hidden");
   $("game").classList.remove("hidden");
   render();
@@ -181,7 +185,7 @@ async function loadMatches() {
   try {
     const { matches } = await sheetGet({ action: "matches", date: $("sheetDate").value });
     sheetMatches = matches;
-    $("sheetMatch").innerHTML = matches.map((m) => `<option value="${m.id}">${m.id}: ${m.teamA} vs ${m.teamB}</option>`).join("");
+    $("sheetMatch").innerHTML = matches.map((m) => `<option value="${m.id}">${m.id}: ${m.teamA} vs ${m.teamB}${m.used ? " (มีข้อมูลแล้ว)" : ""}</option>`).join("");
     applyMatch();
     sheetMsg(`พบ ${matches.length} แมตช์`, "ok");
   } catch (e) { sheetMsg("โหลดแมตช์ไม่สำเร็จ: " + e.message, "err"); }
@@ -224,7 +228,7 @@ function syncSheet() {
   });
 }
 
-$("sheetUrl").value = localStorage.getItem(SHEET_KEYS.url) || "";
+$("sheetUrl").value = (window.UVC_CONFIG && window.UVC_CONFIG.sheetUrl) || localStorage.getItem(SHEET_KEYS.url) || "";
 $("sheetToken").value = localStorage.getItem(SHEET_KEYS.token) || "";
 $("loadSheetBtn").onclick = loadTabs;
 $("sheetDate").onchange = loadMatches;
