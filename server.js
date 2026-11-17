@@ -45,7 +45,10 @@ async function callSheet(params, body) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
+  res.setHeader("X-App", "valorant-ban-map");   // ไว้เช็กว่าคำขอมาถึงโปรแกรมนี้จริง
+  res.on("finish", () => console.log(req.method, url.pathname, res.statusCode));
   try {
+    if (req.method === "GET" && url.pathname === "/healthz") { res.writeHead(200, { "Content-Type": "text/plain" }); return res.end("ok"); }
     if (req.method === "GET" && url.pathname === "/api/tabs") return send(res, 200, await callSheet({ action: "tabs" }));
     if (req.method === "GET" && url.pathname === "/api/matches")
       return send(res, 200, await callSheet({ action: "matches", date: url.searchParams.get("date") || "" }));
@@ -59,10 +62,10 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "Content-Type": f[1] });
       return res.end(fs.readFileSync(path.join(__dirname, f[0])));
     }
-    res.writeHead(404); res.end("not found");
+    res.writeHead(404, { "Content-Type": "text/plain" }); res.end("ban-map: not found");
   } catch (e) {
     send(res, 200, { ok: false, error: String(e.message || e) });
   }
 });
 
-server.listen(PORT, () => console.log("listening on " + PORT));
+server.listen(PORT, "0.0.0.0", () => console.log("listening on " + PORT + " sheet=" + (SHEET_URL ? "set" : "missing") + " token=" + (TOKEN ? "set" : "missing")));
