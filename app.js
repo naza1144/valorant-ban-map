@@ -55,7 +55,7 @@ function start() {
   state = {
     teams: [$("teamA").value || "Team A", $("teamB").value || "Team B"],
     format, maps: maps.map((m) => ({ ...m, status: "free", by: null, sideBy: null, side: null })),
-    seq, step: 0, history: [], pendingSide: null,
+    seq, step: 0, history: [], pendingSide: null, decider: null,
     sheet: sheetTarget(),
   };
   if (state.sheet) {
@@ -93,6 +93,13 @@ function chooseSide(side) {
   render();
 }
 
+// รอบสุดท้าย (Decider): กรรมการกรอกเองว่าทีมไหนเริ่มฝั่งไหน (ผลโยนเหรียญ/Knife Round)
+function chooseDecider(team, side) {
+  snapshot();
+  state.decider = { team, side };
+  render();
+}
+
 function finishIfDone() {
   if (state.step >= state.seq.length && !state.pendingSide) {
     const left = freeMaps();
@@ -100,22 +107,30 @@ function finishIfDone() {
   }
 }
 
-function snapshot() { state.history.push(JSON.stringify({ maps: state.maps, step: state.step, pendingSide: state.pendingSide && state.pendingSide.id })); }
+function snapshot() { state.history.push(JSON.stringify({ maps: state.maps, step: state.step, decider: state.decider, pendingSide: state.pendingSide && state.pendingSide.id })); }
 function undo() {
   if (!state || !state.history.length) return;
   const s = JSON.parse(state.history.pop());
-  state.maps = s.maps; state.step = s.step;
+  state.maps = s.maps; state.step = s.step; state.decider = s.decider || null;
   state.pendingSide = s.pendingSide ? state.maps.find((m) => m.id === s.pendingSide) : null;
   render();
 }
 
 function render() {
-  const done = state.step >= state.seq.length && !state.pendingSide;
+  const allChosen = state.step >= state.seq.length && !state.pendingSide;
+  const needDecider = allChosen && !state.decider;
+  const done = allChosen && !!state.decider;
   const st = $("status");
   if (state.pendingSide) {
     const m = state.pendingSide, t = state.teams[1 - m.by];
     st.innerHTML = `<b>${t}</b> เลือกฝั่งบน <b>${m.name}</b>`;
     st.innerHTML += `<div class="side-choice"><button class="atk" onclick="chooseSide('Attack')">⚔ Attack</button><button class="def" onclick="chooseSide('Defend')">🛡 Defend</button></div>`;
+  } else if (needDecider) {
+    const dm = state.maps.find((m) => m.status === "decider");
+    st.innerHTML = `แมพสุดท้าย <b>${dm ? dm.name : ""}</b> — กรอกว่าทีมไหนเริ่มฝั่งไหนก่อน`;
+    st.innerHTML += `<div class="side-choice">` + [0, 1].map((t) =>
+      `<button class="atk" onclick="chooseDecider(${t}, 'Attack')">⚔ ${state.teams[t]} เริ่ม Attack</button><button class="def" onclick="chooseDecider(${t}, 'Defend')">🛡 ${state.teams[t]} เริ่ม Defend</button>`
+    ).join("") + `</div>`;
   } else if (done) {
     st.innerHTML = "✅ เสร็จสิ้น";
   } else {
@@ -133,7 +148,7 @@ function render() {
     let tag = "";
     if (m.status === "banned") tag = `BAN · ${state.teams[m.by]}`;
     if (m.status === "picked") tag = `PICK · ${state.teams[m.by]}` + (m.side ? ` | ${state.teams[m.sideBy]}: ${m.side}` : "");
-    if (m.status === "decider") tag = "DECIDER";
+    if (m.status === "decider") tag = "DECIDER" + (state.decider ? ` | ${state.teams[state.decider.team]}: ${state.decider.side}` : "");
     d.innerHTML = (tag ? `<div class="tag">${tag}</div>` : "") + `<div class="name">${m.name}</div>`;
     d.onclick = () => onMapClick(m);
     box.appendChild(d);
@@ -141,10 +156,11 @@ function render() {
 
   const res = $("result");
   if (done) {
-    const played = state.maps.filter((m) => m.status === "picked" || m.status === "decider");
+    const played = state.maps.filter((m) => m.status === "picked" || m.status === "decider")
+      .sort((x, y) => (x.status === "decider" ? 9 : x.pickNo) - (y.status === "decider" ? 9 : y.pickNo));
     res.classList.remove("hidden");
     res.innerHTML = `<h2>ลำดับแมพที่เล่น</h2><ol>` + played.map((m) =>
-      `<li><b>${m.name}</b> — ${m.status === "decider" ? "Decider (แมพที่เหลือ — เลือกฝั่งตามกติกาของลีก)" : `เลือกโดย ${state.teams[m.by]}, ${state.teams[m.sideBy]} เลือก ${m.side}`}</li>`
+      `<li><b>${m.name}</b> — ${m.status === "decider" ? `Decider — ${state.teams[state.decider.team]} เริ่มฝั่ง ${state.decider.side}` : `เลือกโดย ${state.teams[m.by]}, ${state.teams[m.sideBy]} เลือก ${m.side}`}</li>`
     ).join("") + `</ol>`;
   } else res.classList.add("hidden");
   syncSheet();
@@ -210,7 +226,10 @@ function sheetPayload() {
     return o;
   });
   const d = maps.find((m) => m.status === "decider");
-  if (d) d.order = picks + 1;
+  if (d) {
+    d.order = picks + 1;
+    if (state.decider) { d.owner = state.teams[state.decider.team]; d.side = state.decider.side === "Attack" ? "ATK" : "DEF"; }   // ทีมที่เริ่มฝั่งนั้นก่อน
+  }
   return { token: $("sheetToken").value, date: state.sheet.date, match: state.sheet.match, maps };
 }
 

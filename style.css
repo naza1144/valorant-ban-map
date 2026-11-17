@@ -33,7 +33,7 @@ button.primary { background: var(--red); font-weight: 700; margin-top: 12px; }
 .map.decider { border-color: var(--blue); }
 .map.disabled { cursor: default; }
 .controls { text-align: center; margin: 20px; display: flex; gap: 10px; justify-content: center; }
-.side-choice { display: flex; gap: 12px; justify-content: center; margin-top: 8px; }
+.side-choice { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 8px; }
 .side-choice button { font-weight: 700; }
 .atk { background: #c0392b !important; }
 .def { background: #2980b9 !important; }
