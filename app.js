@@ -85,7 +85,24 @@ function coinResult(face) {
   state.coin.winner = face === state.coin.call ? 0 : 1;   // ทีม A เลือก state.coin.call, ทีม B ได้อีกด้าน
   render();
 }
-function coinToss() { coinResult(Math.random() < 0.5 ? "หัว" : "ก้อย"); }
+function coinHtml(face) {
+  const rot = face === "ก้อย" ? "rotateY(180deg)" : "none";
+  return `<div class="coin-wrap" id="coinWrap"><div class="coin" id="coin" style="transform:${rot}"><div class="face head">หัว</div><div class="face tail">ก้อย</div></div></div>`;
+}
+// ทอยเหรียญแบบมีอนิเมชัน: เหรียญลอยขึ้นและหมุนหลายรอบ แล้วหยุดที่ด้านที่สุ่มได้
+function coinToss() {
+  if (state.tossing) return;
+  state.tossing = true;
+  const face = Math.random() < 0.5 ? "หัว" : "ก้อย";
+  document.querySelectorAll(".side-choice button").forEach((b) => { b.disabled = true; });
+  const deg = 360 * 6 + (face === "ก้อย" ? 180 : 0), ms = 2400;
+  $("coinWrap").animate(
+    [{ transform: "translateY(0) scale(1)" }, { transform: "translateY(-140px) scale(1.5)", offset: 0.45 }, { transform: "translateY(0) scale(1)" }],
+    { duration: ms, easing: "ease-in-out" });
+  $("coin").animate([{ transform: "rotateY(0deg)" }, { transform: `rotateY(${deg}deg)` }],
+    { duration: ms, easing: "cubic-bezier(.15,.6,.25,1)", fill: "forwards" });
+  setTimeout(() => { state.tossing = false; coinResult(face); }, ms + 700);
+}
 function chooseDecider(side) {
   snapshot();
   state.decider = { team: state.coin.winner, side, coin: state.coin };
@@ -126,10 +143,10 @@ function render() {
         + `<div class="side-choice"><button onclick="coinCall('หัว')">🪙 หัว</button><button onclick="coinCall('ก้อย')">🪙 ก้อย</button></div>`;
     } else if (!c.result) {
       st.innerHTML = `${head}<br>${T[0]}: <b>${c.call}</b> · ${T[1]}: <b>${c.call === "หัว" ? "ก้อย" : "หัว"}</b>`
-        + `<div class="side-choice"><button class="primary" onclick="coinToss()">🪙 ทอยเหรียญ (สุ่ม)</button><button onclick="coinResult('หัว')">ทอยจริงแล้ว: ออกหัว</button><button onclick="coinResult('ก้อย')">ทอยจริงแล้ว: ออกก้อย</button></div>`;
+        + coinHtml("หัว") + `<div class="side-choice"><button class="primary" onclick="coinToss()">🪙 ทอยเหรียญ (สุ่ม)</button><button onclick="coinResult('หัว')">ทอยจริงแล้ว: ออกหัว</button><button onclick="coinResult('ก้อย')">ทอยจริงแล้ว: ออกก้อย</button></div>`;
     } else {
       st.innerHTML = `เหรียญออก <b>${c.result}</b> — <b>${T[c.winner]}</b> ชนะการทอย เลือกฝั่งที่จะเริ่มบน <b>${dm ? dm.name : ""}</b>`
-        + `<div class="side-choice"><button class="atk" onclick="chooseDecider('Attack')">⚔ Attack</button><button class="def" onclick="chooseDecider('Defend')">🛡 Defend</button></div>`;
+        + coinHtml(c.result) + `<div class="side-choice"><button class="atk" onclick="chooseDecider('Attack')">⚔ Attack</button><button class="def" onclick="chooseDecider('Defend')">🛡 Defend</button></div>`;
     }
   } else if (done) {
     st.innerHTML = "✅ เสร็จสิ้น";
