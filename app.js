@@ -30,22 +30,6 @@ const $ = (id) => document.getElementById(id);
 let state = null;
 let pool = new Set(DEFAULT_POOL);
 
-function renderPicker() {
-  $("poolPicker").innerHTML = "";
-  ALL_MAPS.forEach((m) => {
-    const c = document.createElement("div");
-    c.className = "chip" + (pool.has(m.id) ? " on" : "");
-    c.textContent = m.name;
-    c.onclick = () => {
-      if (pool.has(m.id)) pool.delete(m.id);
-      else if (pool.size >= 7) return alert("เลือกได้สูงสุด 7 แมพ — ยกเลิกแมพอื่นก่อน");
-      else pool.add(m.id);
-      renderPicker();
-    };
-    $("poolPicker").appendChild(c);
-  });
-}
-
 function start() {
   const format = "bo3";
   const maps = ALL_MAPS.filter((m) => pool.has(m.id));
@@ -55,7 +39,7 @@ function start() {
   state = {
     teams: [$("teamA").value || "Team A", $("teamB").value || "Team B"],
     format, maps: maps.map((m) => ({ ...m, status: "free", by: null, sideBy: null, side: null })),
-    seq, step: 0, history: [], pendingSide: null, decider: null,
+    seq, step: 0, history: [], pendingSide: null, decider: null, coin: null,
     sheet: sheetTarget(),
   };
   if (state.sheet) {
@@ -93,10 +77,18 @@ function chooseSide(side) {
   render();
 }
 
-// รอบสุดท้าย (Decider): กรรมการกรอกเองว่าทีมไหนเริ่มฝั่งไหน (ผลโยนเหรียญ/Knife Round)
-function chooseDecider(team, side) {
+// รอบสุดท้าย (Decider): ทีม A เลือกหัว/ก้อย -> ทอยเหรียญ (สุ่มหรือกรอกผลเอง) -> ทีมที่ชนะเลือกฝั่งเริ่ม
+function coinCall(face) { snapshot(); state.coin = { call: face }; render(); }
+function coinResult(face) {
   snapshot();
-  state.decider = { team, side };
+  state.coin.result = face;
+  state.coin.winner = face === state.coin.call ? 0 : 1;   // ทีม A เลือก state.coin.call, ทีม B ได้อีกด้าน
+  render();
+}
+function coinToss() { coinResult(Math.random() < 0.5 ? "หัว" : "ก้อย"); }
+function chooseDecider(side) {
+  snapshot();
+  state.decider = { team: state.coin.winner, side, coin: state.coin };
   render();
 }
 
@@ -107,11 +99,11 @@ function finishIfDone() {
   }
 }
 
-function snapshot() { state.history.push(JSON.stringify({ maps: state.maps, step: state.step, decider: state.decider, pendingSide: state.pendingSide && state.pendingSide.id })); }
+function snapshot() { state.history.push(JSON.stringify({ maps: state.maps, step: state.step, decider: state.decider, coin: state.coin, pendingSide: state.pendingSide && state.pendingSide.id })); }
 function undo() {
   if (!state || !state.history.length) return;
   const s = JSON.parse(state.history.pop());
-  state.maps = s.maps; state.step = s.step; state.decider = s.decider || null;
+  state.maps = s.maps; state.step = s.step; state.decider = s.decider || null; state.coin = s.coin || null;
   state.pendingSide = s.pendingSide ? state.maps.find((m) => m.id === s.pendingSide) : null;
   render();
 }
@@ -127,10 +119,18 @@ function render() {
     st.innerHTML += `<div class="side-choice"><button class="atk" onclick="chooseSide('Attack')">⚔ Attack</button><button class="def" onclick="chooseSide('Defend')">🛡 Defend</button></div>`;
   } else if (needDecider) {
     const dm = state.maps.find((m) => m.status === "decider");
-    st.innerHTML = `แมพสุดท้าย <b>${dm ? dm.name : ""}</b> — กรอกว่าทีมไหนเริ่มฝั่งไหนก่อน`;
-    st.innerHTML += `<div class="side-choice">` + [0, 1].map((t) =>
-      `<button class="atk" onclick="chooseDecider(${t}, 'Attack')">⚔ ${state.teams[t]} เริ่ม Attack</button><button class="def" onclick="chooseDecider(${t}, 'Defend')">🛡 ${state.teams[t]} เริ่ม Defend</button>`
-    ).join("") + `</div>`;
+    const c = state.coin, T = state.teams;
+    const head = `แมพสุดท้าย <b>${dm ? dm.name : ""}</b> — ทอยเหรียญเลือกฝั่ง`;
+    if (!c) {
+      st.innerHTML = `${head}<br><b>${T[0]}</b> เลือกหัวหรือก้อย (${T[1]} ได้ด้านที่เหลือ)`
+        + `<div class="side-choice"><button onclick="coinCall('หัว')">🪙 หัว</button><button onclick="coinCall('ก้อย')">🪙 ก้อย</button></div>`;
+    } else if (!c.result) {
+      st.innerHTML = `${head}<br>${T[0]}: <b>${c.call}</b> · ${T[1]}: <b>${c.call === "หัว" ? "ก้อย" : "หัว"}</b>`
+        + `<div class="side-choice"><button class="primary" onclick="coinToss()">🪙 ทอยเหรียญ (สุ่ม)</button><button onclick="coinResult('หัว')">ทอยจริงแล้ว: ออกหัว</button><button onclick="coinResult('ก้อย')">ทอยจริงแล้ว: ออกก้อย</button></div>`;
+    } else {
+      st.innerHTML = `เหรียญออก <b>${c.result}</b> — <b>${T[c.winner]}</b> ชนะการทอย เลือกฝั่งที่จะเริ่มบน <b>${dm ? dm.name : ""}</b>`
+        + `<div class="side-choice"><button class="atk" onclick="chooseDecider('Attack')">⚔ Attack</button><button class="def" onclick="chooseDecider('Defend')">🛡 Defend</button></div>`;
+    }
   } else if (done) {
     st.innerHTML = "✅ เสร็จสิ้น";
   } else {
@@ -160,7 +160,7 @@ function render() {
       .sort((x, y) => (x.status === "decider" ? 9 : x.pickNo) - (y.status === "decider" ? 9 : y.pickNo));
     res.classList.remove("hidden");
     res.innerHTML = `<h2>ลำดับแมพที่เล่น</h2><ol>` + played.map((m) =>
-      `<li><b>${m.name}</b> — ${m.status === "decider" ? `Decider — ${state.teams[state.decider.team]} เริ่มฝั่ง ${state.decider.side}` : `เลือกโดย ${state.teams[m.by]}, ${state.teams[m.sideBy]} เลือก ${m.side}`}</li>`
+      `<li><b>${m.name}</b> — ${m.status === "decider" ? `Decider — เหรียญออก${state.decider.coin.result}, ${state.teams[state.decider.team]} ชนะการทอยและเลือกเริ่มฝั่ง ${state.decider.side}` : `เลือกโดย ${state.teams[m.by]}, ${state.teams[m.sideBy]} เลือก ${m.side}`}</li>`
     ).join("") + `</ol>`;
   } else res.classList.add("hidden");
   syncSheet();
@@ -212,7 +212,7 @@ function applyMatch() {
   if (!m) return;
   $("teamA").value = m.teamA; $("teamB").value = m.teamB;
   const ids = m.maps.map((n) => n.toLowerCase()).filter((n) => ALL_MAPS.some((a) => a.id === n));
-  if (ids.length === 7) { pool = new Set(ids); renderPicker(); }
+  if (ids.length === 7) pool = new Set(ids);
 }
 
 function sheetPayload() {
@@ -256,4 +256,3 @@ $("sheetMatch").onchange = applyMatch;
 $("startBtn").onclick = start;
 $("undoBtn").onclick = undo;
 $("resetBtn").onclick = () => { state = null; $("game").classList.add("hidden"); $("setup").classList.remove("hidden"); };
-renderPicker();
