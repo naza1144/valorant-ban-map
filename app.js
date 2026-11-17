@@ -166,8 +166,7 @@ function render() {
   syncSheet();
 }
 
-// ===== เชื่อม Google Sheet ผ่าน Apps Script =====
-const SHEET_KEYS = { url: "uvc_sheet_url", token: "uvc_sheet_token" };
+// ===== เชื่อม Google Sheet ผ่านหลังบ้าน (server.js) — URL/TOKEN เก็บบนเซิร์ฟเวอร์ ไม่อยู่ในเบราว์เซอร์ =====
 let sheetMatches = [];
 let syncChain = Promise.resolve();
 
@@ -178,28 +177,27 @@ function sheetTarget() {
 function sheetMsg(text, cls) { const e = $("sheetMsg"); e.textContent = text; e.className = "hint " + (cls || ""); }
 function logMsg(text, cls) { const e = $("log"); e.textContent = text; e.className = "log " + (cls || ""); }
 
-async function sheetGet(params) {
-  const q = new URLSearchParams({ ...params, token: $("sheetToken").value });
-  const r = await fetch($("sheetUrl").value + "?" + q);
+async function api(path, opt) {
+  const r = await fetch(path, opt);
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error);
+  if (!j.ok) throw new Error(j.error || "error");
   return j;
 }
 
 async function loadTabs() {
   try {
-    localStorage.setItem(SHEET_KEYS.url, $("sheetUrl").value);
-    localStorage.setItem(SHEET_KEYS.token, $("sheetToken").value);
     sheetMsg("กำลังโหลด…");
-    const { tabs } = await sheetGet({ action: "tabs" });
+    const { tabs } = await api("/api/tabs");
+    const keep = $("sheetDate").value;
     $("sheetDate").innerHTML = tabs.map((t) => `<option>${t}</option>`).join("");
+    if (tabs.includes(keep)) $("sheetDate").value = keep;
     await loadMatches();
-  } catch (e) { sheetMsg("เชื่อมต่อไม่สำเร็จ: " + e.message, "err"); }
+  } catch (e) { sheetMsg("เชื่อมต่อชีตไม่สำเร็จ: " + e.message, "err"); }
 }
 
 async function loadMatches() {
   try {
-    const { matches } = await sheetGet({ action: "matches", date: $("sheetDate").value });
+    const { matches } = await api("/api/matches?date=" + encodeURIComponent($("sheetDate").value));
     sheetMatches = matches;
     $("sheetMatch").innerHTML = matches.map((m) => `<option value="${m.id}">${m.id}: ${m.teamA} vs ${m.teamB}${m.used ? " (มีข้อมูลแล้ว)" : ""}</option>`).join("");
     applyMatch();
@@ -228,9 +226,9 @@ function sheetPayload() {
   const d = maps.find((m) => m.status === "decider");
   if (d) {
     d.order = picks + 1;
-    if (state.decider) { d.owner = state.teams[state.decider.team]; d.side = state.decider.side === "Attack" ? "ATK" : "DEF"; }   // ทีมที่เริ่มฝั่งนั้นก่อน
+    if (state.decider) { d.owner = state.teams[state.decider.team]; d.side = state.decider.side === "Attack" ? "ATK" : "DEF"; }   // ทีมที่ชนะการทอยและเลือกฝั่ง
   }
-  return { token: $("sheetToken").value, date: state.sheet.date, match: state.sheet.match, maps };
+  return { date: state.sheet.date, match: state.sheet.match, maps };
 }
 
 function syncSheet() {
@@ -239,19 +237,16 @@ function syncSheet() {
   logMsg("กำลังอัปเดตชีต…");
   syncChain = syncChain.then(async () => {
     try {
-      const r = await fetch($("sheetUrl").value, { method: "POST", body });   // text/plain ไม่ต้อง preflight
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error);
+      await api("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body });
       logMsg("อัปเดตชีตแล้ว ✓", "ok");
     } catch (e) { logMsg("อัปเดตชีตไม่สำเร็จ: " + e.message, "err"); }
   });
 }
 
-$("sheetUrl").value = (window.UVC_CONFIG && window.UVC_CONFIG.sheetUrl) || localStorage.getItem(SHEET_KEYS.url) || "";
-$("sheetToken").value = localStorage.getItem(SHEET_KEYS.token) || "";
 $("loadSheetBtn").onclick = loadTabs;
 $("sheetDate").onchange = loadMatches;
 $("sheetMatch").onchange = applyMatch;
+loadTabs();
 
 $("startBtn").onclick = start;
 $("undoBtn").onclick = undo;
