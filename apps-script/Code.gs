@@ -2,13 +2,11 @@
  * ตัวกลางระหว่างเว็บ Ban Map กับ Google Sheet (UVC รวมคะแนน)
  * วิธีติดตั้งดูที่ apps-script/README.md
  *
- * โครงของแต่ละแมตช์ในแท็บวัน (ตรวจจากคอลัมน์ K ที่มีป้าย A1, B2, A3 ...):
- *   ป้ายแมตช์  คอลัมน์ K (แถวที่ r)
- *   ชื่อทีม    คอลัมน์ C (ทีมแรก) และ G (ทีมที่สอง) ในแถวที่คอลัมน์ E เป็น A หรือ B (ช่วง r-1 ถึง r+2)
- *   ชื่อแมพ    แถว r+1 คอลัมน์ J ถึง P  <- เว็บเปลี่ยนสีช่องนี้: แดง = แบน, เขียว = เลือก
- *   ลำดับ     แถว r+2  (map1, map2, map3)
- *   ทีมเจ้าของ แถว r+3  (ทีมที่เลือกแมพนั้น)
- *   ฝั่ง       แถว r+4  (ฝั่งของทีมเจ้าของ: ATK / DEF)
+ * โครงของแต่ละแมตช์ในแท็บวัน (h = แถวชื่อแมพ Abyss..Sunset ในคอลัมน์ J ถึง P):
+ *   ชื่อแมพ    แถว h   <- เว็บเปลี่ยนสีช่องนี้: แดง = แบน, เขียว = เลือก
+ *   ลำดับ     แถว h+1 (map1, map2, map3)
+ *   ทีมเจ้าของ แถว h+2 (ทีมที่เลือกแมพนั้น)
+ *   ฝั่ง       แถว h+3 (ฝั่งของทีมเจ้าของ: ATK / DEF)
  */
 
 // เปลี่ยนค่านี้ก่อน Deploy แล้วใส่ค่าเดียวกันในหน้าเว็บ
@@ -18,25 +16,35 @@ const COL_TEAM1 = 3, COL_TEAM2 = 7, COL_GROUP = 5, COL_LABEL = 11;
 const COL_MAP_FIRST = 10, MAP_COUNT = 7;          // J..P
 const RED = '#ff0000', GREEN = '#00ff00';
 
-/** หาแมตช์ทั้งหมดจากตาราง values (2D array เริ่มที่ A1 กว้างอย่างน้อย 16 คอลัมน์) */
+/**
+ * หาแมตช์ทั้งหมดจากตาราง values (2D array เริ่มที่ A1 กว้างอย่างน้อย 16 คอลัมน์)
+ * แถวชื่อแมพ = แถวที่คอลัมน์ J..P มีข้อความครบทั้ง 7 ช่อง
+ * ทีม = คอลัมน์ C และ G ในแถวที่คอลัมน์ E เป็น A/B (แถวชื่อแมพ หรือสูงขึ้นไปไม่เกิน 2 แถว)
+ * รหัสแมตช์ = ป้ายในคอลัมน์ K เหนือแถวชื่อแมพ (เช่น A1) ถ้าไม่มีให้ตั้งเป็น กลุ่ม+ลำดับ (A1, B2, A3 ...)
+ */
 function findBlocks_(v) {
   const blocks = [];
   for (let r = 0; r < v.length; r++) {
-    const id = String(v[r][COL_LABEL - 1] || '').trim();
-    if (!/^[AB]\d+$/.test(id)) continue;
-    let teamRow = -1;
-    for (let t = r - 1; t <= r + 2; t++) {
-      if (t >= 0 && t < v.length && /^[AB]$/.test(String(v[t][COL_GROUP - 1]).trim())) { teamRow = t; break; }
-    }
-    if (teamRow < 0 || r + 1 >= v.length) continue;
     const names = [];
-    for (let i = 0; i < MAP_COUNT; i++) names.push(String(v[r + 1][COL_MAP_FIRST - 1 + i] || '').trim());
+    for (let i = 0; i < MAP_COUNT; i++) names.push(String(v[r][COL_MAP_FIRST - 1 + i] || '').trim());
+    if (names.some((n) => n === '')) continue;
+    let teamRow = -1;
+    for (let t = r; t >= Math.max(r - 2, 0); t--) {
+      if (/^[AB]$/.test(String(v[t][COL_GROUP - 1]).trim())) { teamRow = t; break; }
+    }
+    if (teamRow < 0) continue;
+    const group = String(v[teamRow][COL_GROUP - 1]).trim();
+    let id = '';
+    for (let t = r - 1; t >= Math.max(r - 2, 0); t--) {
+      const label = String(v[t][COL_LABEL - 1] || '').trim();
+      if (/^[AB]\d+$/.test(label)) { id = label; break; }
+    }
+    if (!id) id = group + (blocks.length + 1);
     blocks.push({
-      id,
-      group: String(v[teamRow][COL_GROUP - 1]).trim(),
+      id, group,
       teamA: clean_(v[teamRow][COL_TEAM1 - 1]),
       teamB: clean_(v[teamRow][COL_TEAM2 - 1]),
-      headerRow: r + 2,            // แถวชื่อแมพ (เลขแถวใน Sheet เริ่มที่ 1)
+      headerRow: r + 1,            // แถวชื่อแมพ (เลขแถวใน Sheet เริ่มที่ 1)
       maps: names,
     });
   }
