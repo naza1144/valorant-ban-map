@@ -14,7 +14,8 @@ const ALL_MAPS = [
   { id: "summit", name: "Summit", color: "#5a7a9a", img: "https://media.valorant-api.com/maps/756da597-416b-c0f2-f47b-afbdf28670bc/splash.png" },
   { id: "abyss",   name: "Abyss", img: "https://media.valorant-api.com/maps/224b0a95-48b9-f703-1bd8-67aca101a61f/splash.png",   color: "#4a3a8a" },
 ];
-const DEFAULT_POOL = ["ascent", "bind", "haven", "split", "lotus", "sunset", "abyss"];
+// แมพตามกติกา UVC2026: Abyss, Bind, Corrode, Haven, Lotus, Summit, Sunset
+const DEFAULT_POOL = ["abyss", "bind", "corrode", "haven", "lotus", "summit", "sunset"];
 
 // ลำดับ action ตามรูปแบบ: ban / pick / (decider = แมพที่เหลือ). team: 0=A, 1=B
 // สำหรับ pick ทีมที่ "ไม่ได้ pick" จะเลือกฝั่ง (Attack/Defend)
@@ -55,7 +56,9 @@ function start() {
     teams: [$("teamA").value || "Team A", $("teamB").value || "Team B"],
     format, maps: maps.map((m) => ({ ...m, status: "free", by: null, sideBy: null, side: null })),
     seq, step: 0, history: [], pendingSide: null,
+    sheet: sheetTarget(),
   };
+  if (state.sheet && !confirm(`จะเขียนทับข้อมูลแมพของแมตช์ ${state.sheet.match} (${state.sheet.date}) ในชีต ต้องการต่อหรือไม่?`)) { state = null; return; }
   $("setup").classList.add("hidden");
   $("game").classList.remove("hidden");
   render();
@@ -67,6 +70,7 @@ function onMapClick(m) {
   if (!state || state.pendingSide || state.step >= state.seq.length || m.status !== "free") return;
   const act = state.seq[state.step];
   snapshot();
+  if (act.type === "pick") m.pickNo = state.maps.filter((x) => x.status === "picked").length + 1;   // ลำดับที่เล่น
   m.status = act.type === "ban" ? "banned" : "picked";
   m.by = act.team;
   if (act.type === "pick") state.pendingSide = m;   // รอฝั่งตรงข้ามเลือกฝั่ง
@@ -139,7 +143,92 @@ function render() {
       `<li><b>${m.name}</b> — ${m.status === "decider" ? "Decider (แมพที่เหลือ — เลือกฝั่งตามกติกาของลีก)" : `เลือกโดย ${state.teams[m.by]}, ${state.teams[m.sideBy]} เลือก ${m.side}`}</li>`
     ).join("") + `</ol>`;
   } else res.classList.add("hidden");
+  syncSheet();
 }
+
+// ===== เชื่อม Google Sheet ผ่าน Apps Script =====
+const SHEET_KEYS = { url: "uvc_sheet_url", token: "uvc_sheet_token" };
+let sheetMatches = [];
+let syncChain = Promise.resolve();
+
+function sheetTarget() {
+  const m = sheetMatches.find((x) => x.id === $("sheetMatch").value);
+  return m && $("sheetDate").value ? { date: $("sheetDate").value, match: m.id } : null;
+}
+function sheetMsg(text, cls) { const e = $("sheetMsg"); e.textContent = text; e.className = "hint " + (cls || ""); }
+function logMsg(text, cls) { const e = $("log"); e.textContent = text; e.className = "log " + (cls || ""); }
+
+async function sheetGet(params) {
+  const q = new URLSearchParams({ ...params, token: $("sheetToken").value });
+  const r = await fetch($("sheetUrl").value + "?" + q);
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error);
+  return j;
+}
+
+async function loadTabs() {
+  try {
+    localStorage.setItem(SHEET_KEYS.url, $("sheetUrl").value);
+    localStorage.setItem(SHEET_KEYS.token, $("sheetToken").value);
+    sheetMsg("กำลังโหลด…");
+    const { tabs } = await sheetGet({ action: "tabs" });
+    $("sheetDate").innerHTML = tabs.map((t) => `<option>${t}</option>`).join("");
+    await loadMatches();
+  } catch (e) { sheetMsg("เชื่อมต่อไม่สำเร็จ: " + e.message, "err"); }
+}
+
+async function loadMatches() {
+  try {
+    const { matches } = await sheetGet({ action: "matches", date: $("sheetDate").value });
+    sheetMatches = matches;
+    $("sheetMatch").innerHTML = matches.map((m) => `<option value="${m.id}">${m.id}: ${m.teamA} vs ${m.teamB}</option>`).join("");
+    applyMatch();
+    sheetMsg(`พบ ${matches.length} แมตช์`, "ok");
+  } catch (e) { sheetMsg("โหลดแมตช์ไม่สำเร็จ: " + e.message, "err"); }
+}
+
+function applyMatch() {
+  const m = sheetMatches.find((x) => x.id === $("sheetMatch").value);
+  if (!m) return;
+  $("teamA").value = m.teamA; $("teamB").value = m.teamB;
+  const ids = m.maps.map((n) => n.toLowerCase()).filter((n) => ALL_MAPS.some((a) => a.id === n));
+  if (ids.length === 7) { pool = new Set(ids); renderPicker(); }
+}
+
+function sheetPayload() {
+  const picks = state.maps.filter((m) => m.status === "picked").length;
+  const maps = state.maps.map((m) => {
+    const o = { name: m.name, status: m.status };
+    if (m.status === "picked") {
+      o.order = m.pickNo; o.owner = state.teams[m.by];
+      o.side = m.side ? (m.side === "Attack" ? "DEF" : "ATK") : "";   // ฝั่งของทีมที่เลือกแมพ (ตรงข้ามกับที่อีกทีมเลือก)
+    }
+    return o;
+  });
+  const d = maps.find((m) => m.status === "decider");
+  if (d) d.order = picks + 1;
+  return { token: $("sheetToken").value, date: state.sheet.date, match: state.sheet.match, maps };
+}
+
+function syncSheet() {
+  if (!state || !state.sheet) return;
+  const body = JSON.stringify(sheetPayload());
+  logMsg("กำลังอัปเดตชีต…");
+  syncChain = syncChain.then(async () => {
+    try {
+      const r = await fetch($("sheetUrl").value, { method: "POST", body });   // text/plain ไม่ต้อง preflight
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      logMsg("อัปเดตชีตแล้ว ✓", "ok");
+    } catch (e) { logMsg("อัปเดตชีตไม่สำเร็จ: " + e.message, "err"); }
+  });
+}
+
+$("sheetUrl").value = localStorage.getItem(SHEET_KEYS.url) || "";
+$("sheetToken").value = localStorage.getItem(SHEET_KEYS.token) || "";
+$("loadSheetBtn").onclick = loadTabs;
+$("sheetDate").onchange = loadMatches;
+$("sheetMatch").onchange = applyMatch;
 
 $("startBtn").onclick = start;
 $("undoBtn").onclick = undo;

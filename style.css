@@ -42,3 +42,9 @@ button.primary { background: var(--red); font-weight: 700; margin-top: 12px; }
 .map.banned .tag { color: var(--red); }
 .map.picked .tag { color: var(--green); }
 .map.decider .tag { color: var(--blue); }
+.sheetbox { margin: 12px 0; padding: 10px 12px; border: 1px solid #33414f; border-radius: 6px; }
+.sheetbox summary { cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+.sheetbox .row { margin-bottom: 8px; align-items: flex-end; }
+.sheetbox input { min-width: 260px; }
+.log.err { color: var(--red); }
+.log.ok { color: var(--green); }

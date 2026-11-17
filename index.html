@@ -17,6 +17,19 @@
       <label>ทีม A <input id="teamA" value="Team A"></label>
       <label>ทีม B <input id="teamB" value="Team B"></label>
     </div>
+    <details id="sheetBox" class="sheetbox">
+      <summary>เชื่อม Google Sheet (ไม่บังคับ)</summary>
+      <div class="row">
+        <label>Apps Script URL <input id="sheetUrl" placeholder="https://script.google.com/macros/s/.../exec"></label>
+        <label>รหัสลับ (TOKEN) <input id="sheetToken" type="password"></label>
+        <button id="loadSheetBtn" type="button">โหลดรายการ</button>
+      </div>
+      <div class="row">
+        <label>วันที่ (แท็บ) <select id="sheetDate"></select></label>
+        <label>แมตช์ <select id="sheetMatch"></select></label>
+      </div>
+      <p class="hint" id="sheetMsg">เมื่อเลือกแมตช์ ชื่อทีมจะมาจากชีต และ ban/pick จะระบายสีในชีตให้อัตโนมัติ</p>
+    </details>
     <p class="hint">เลือกแมพที่อยู่ใน Map Pool (คลิกเพื่อเปิด/ปิด) — ต้องเลือก 7 แมพพอดี (ban 2 → pick 2 → ban 2 → เหลือ 1 แมพ = เล่น 3 แมพ)</p>
     <div id="poolPicker" class="pool-picker"></div>
     <button id="startBtn" class="primary">เริ่ม Ban/Pick</button>
