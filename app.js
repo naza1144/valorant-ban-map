@@ -351,7 +351,7 @@ function renderStandings(groups, opt) {
       return `<div class="st-row${rank === 1 ? " top" : ""}${hl.includes(normName(t.team)) ? " hl" : ""}" style="--i:${i};--w:${Math.round((t.score / max) * 100)}%">
         <div class="bar"></div><div class="rk">${rank}</div><div class="nm">${esc(t.team)}</div><div class="pt">${t.score}</div></div>`;
     }).join("");
-    return `<div class="st-group"><h3>สาย ${esc(g.name)}</h3>${rows}</div>`;
+    return `<div class="st-group">${rows}</div>`;
   }).join("");
   $("standings").innerHTML = `
     <div class="st-head"><div class="st-title">คะแนน<span>รวม</span></div><div class="st-sub">UVC 2026 · STANDINGS</div></div>
