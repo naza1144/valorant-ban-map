@@ -345,14 +345,15 @@ function renderStandings(groups, opt) {
   const hl = (opt.highlight || []).map(normName);
   const max = Math.max(1, ...groups.flatMap((g) => g.teams.map((t) => t.score)));
   // แยกตามสาย: แต่ละสายเรียงคะแนนมากไปน้อยของตัวเอง (เสมอกันคงลำดับเดิม)
-  const html = groups.map((g) => {
+  const html = groups.map((g, gi) => {
+    const label = /^\d+$/.test(g.name) ? String.fromCharCode(65 + gi) : g.name;   // Apps Script เวอร์ชันเก่าตั้งชื่อกลุ่มที่หัวหายเป็นเลข -> ใช้ตัวอักษรแทน
     const teams = g.teams.slice().sort((a, b) => b.score - a.score);
     const rows = teams.map((t, i) => {
       const rank = teams.findIndex((x) => x.score === t.score) + 1;     // คะแนนเท่ากัน = อันดับเท่ากัน
       return `<div class="st-row${rank === 1 ? " top" : ""}${hl.includes(normName(t.team)) ? " hl" : ""}" style="--i:${i};--w:${Math.round((t.score / max) * 100)}%">
         <div class="bar"></div><div class="rk">${rank}</div><div class="nm">${esc(t.team)}</div><div class="pt">${t.score}</div></div>`;
     }).join("");
-    return `<div class="st-group"><div class="st-gname">${esc(g.name)}</div>${rows}</div>`;
+    return `<div class="st-group"><div class="st-gname">${esc(label)}</div>${rows}</div>`;
   }).join("");
   $("standings").innerHTML = `
     <div class="st-head"><div class="st-title">คะแนน<span>รวม</span></div><div class="st-sub">UVC 2026 · STANDINGS</div></div>
