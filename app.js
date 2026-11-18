@@ -178,7 +178,7 @@ function render() {
     res.classList.remove("hidden");
     res.innerHTML = `<h2>ลำดับแมพที่เล่น</h2><ol>` + played.map((m) =>
       `<li><b>${m.name}</b> — ${m.status === "decider" ? `Decider — เหรียญออก${state.decider.coin.result}, ${state.teams[state.decider.team]} ชนะการทอยและเลือกเริ่มฝั่ง ${state.decider.side}` : `เลือกโดย ${state.teams[m.by]}, ${state.teams[m.sideBy]} เลือก ${m.side}`}</li>`
-    ).join("") + `</ol>`;
+    ).join("") + `</ol>` + (state.sheet ? `<button class="primary alt" onclick="openResult()">บันทึกผลการแข่งขัน →</button>` : "");
   } else res.classList.add("hidden");
   syncSheet();
 }
@@ -194,10 +194,16 @@ function sheetTarget() {
 function sheetMsg(text, cls) { const e = $("sheetMsg"); e.textContent = text; e.className = "hint " + (cls || ""); }
 function logMsg(text, cls) { const e = $("log"); e.textContent = text; e.className = "log " + (cls || ""); }
 
-async function api(path, opt) {
+// รหัสกรรมการ (ถ้า server ตั้ง REF_PIN ไว้) จะขอครั้งแรกที่เขียนชีต แล้วจำไว้ในเบราว์เซอร์
+async function api(path, opt = {}, retry = true) {
+  opt = { ...opt, headers: { ...(opt.headers || {}), "X-PIN": localStorage.getItem("uvc_pin") || "" } };
   const r = await fetch(path, opt);
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "error");
+  if (!j.ok && j.error === "pin" && retry) {
+    const p = prompt("ใส่รหัสกรรมการ");
+    if (p) { localStorage.setItem("uvc_pin", p); return api(path, opt, false); }
+  }
+  if (!j.ok) throw new Error(j.error === "pin" ? "รหัสกรรมการไม่ถูกต้อง" : (j.error || "error"));
   return j;
 }
 
@@ -260,6 +266,67 @@ function syncSheet() {
   });
 }
 
+// ===== บันทึกผลการแข่งขันลงชีต (ผลแต่ละแมพ + สละสิทธิ์ + คะแนนที่ได้) =====
+let rs = null;   // { target, teams, names, maps:[null|0|1 x3], forfeit:null|0|1 }
+
+function resultPoints() {
+  if (rs.forfeit !== null) return { pts: rs.forfeit === 0 ? [0, 3] : [3, 0] };
+  const w = [0, 1].map((t) => rs.maps.filter((m) => m === t).length);
+  if (w[0] > 2 || w[1] > 2) return { error: "ทีมหนึ่งชนะได้ไม่เกิน 2 แมพ" };
+  if (w[0] === 2) return { w, pts: w[1] === 0 ? [3, 0] : [2, 1] };
+  if (w[1] === 2) return { w, pts: w[0] === 0 ? [0, 3] : [1, 2] };
+  return { w, error: "ยังไม่มีทีมที่ชนะครบ 2 แมพ" };
+}
+
+async function openResult() {
+  const t = sheetTarget();
+  if (!t) return alert("เลือกวันที่และแมตช์ก่อน");
+  try { sheetMatches = (await api("/api/matches?date=" + encodeURIComponent(t.date))).matches; } catch (e) { /* ใช้รายการเดิม */ }
+  const m = sheetMatches.find((x) => x.id === t.match);
+  if (!m) return alert("ไม่พบแมตช์นี้ในชีต");
+  rs = { target: t, teams: [m.teamA, m.teamB], maps: [null, null, null], forfeit: null,
+    names: [1, 2, 3].map((n) => ((m.played || []).find((p) => p.order === n) || {}).name || "") };
+  $("setup").classList.add("hidden"); $("game").classList.add("hidden"); $("resultView").classList.remove("hidden");
+  renderResult();
+}
+
+function setMapWinner(n, v) { rs.maps[n] = v; renderResult(); }
+function setForfeit(v) { rs.forfeit = v; renderResult(); }
+function closeResult() {
+  $("resultView").classList.add("hidden");
+  $(state ? "game" : "setup").classList.remove("hidden");
+}
+
+function renderResult(msg, cls) {
+  const T = rs.teams, r = resultPoints();
+  const btn = (on, label, fn, extra = "") => `<button class="${on ? "on " : ""}${extra}" onclick="${fn}">${label}</button>`;
+  let html = `<h2>บันทึกผล — ${rs.target.match} (${rs.target.date})</h2><p><b>${T[0]}</b> vs <b>${T[1]}</b></p>`;
+  html += [0, 1, 2].map((n) => `<div class="rrow${rs.forfeit !== null ? " dim" : ""}"><span class="lbl">แมพ ${n + 1}${rs.names[n] ? " — " + rs.names[n] : ""}</span>`
+    + btn(rs.maps[n] === 0, `${T[0]} ชนะ`, `setMapWinner(${n},0)`) + btn(rs.maps[n] === 1, `${T[1]} ชนะ`, `setMapWinner(${n},1)`)
+    + btn(rs.maps[n] === null, "ไม่ได้เล่น", `setMapWinner(${n},null)`) + `</div>`).join("");
+  html += `<div class="rrow"><span class="lbl">สละสิทธิ์</span>`
+    + btn(rs.forfeit === 0, `${T[0]} สละสิทธิ์`, "setForfeit(0)", "forf") + btn(rs.forfeit === 1, `${T[1]} สละสิทธิ์`, "setForfeit(1)", "forf")
+    + btn(rs.forfeit === null, "ไม่มี", "setForfeit(null)") + `</div>`;
+  html += r.pts ? `<div class="rsum">คะแนนที่ได้: <b>${T[0]} ${r.pts[0]}</b> : <b>${r.pts[1]} ${T[1]}</b></div>`
+    : `<div class="rsum err">${r.error}</div>`;
+  html += `<div class="row"><button class="primary" ${r.pts ? "" : "disabled"} onclick="saveResult()">บันทึกผลลงชีต</button><button onclick="closeResult()">กลับ</button></div>`;
+  html += `<p class="hint ${cls || ""}" id="resultMsg">${msg || ""}</p>`;
+  $("resultBody").innerHTML = html;
+}
+
+async function saveResult() {
+  const r = resultPoints();
+  if (!r.pts) return;
+  if (!confirm(`บันทึกผล ${rs.target.match}: ${rs.teams[0]} ${r.pts[0]} : ${r.pts[1]} ${rs.teams[1]} ลงชีตหรือไม่?`)) return;
+  try {
+    renderResult("กำลังบันทึก…");
+    await api("/api/result", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: rs.target.date, match: rs.target.match, maps: rs.maps, forfeit: rs.forfeit }) });
+    renderResult("บันทึกผลลงชีตแล้ว ✓", "ok");
+  } catch (e) { renderResult("บันทึกไม่สำเร็จ: " + e.message, "err"); }
+}
+
+$("resultBtn").onclick = openResult;
 $("loadSheetBtn").onclick = loadTabs;
 $("sheetDate").onchange = loadMatches;
 $("sheetMatch").onchange = applyMatch;

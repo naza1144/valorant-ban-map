@@ -55,3 +55,11 @@ button.primary { background: var(--red); font-weight: 700; margin-top: 12px; }
   background: radial-gradient(circle at 35% 30%, #fff3b0, #f2c94c 55%, #b8891a); box-shadow: 0 4px 12px rgba(0,0,0,.5); }
 .coin .tail { transform: rotateY(180deg); }
 .side-choice button:disabled { opacity: .5; cursor: default; }
+button.alt { background: #2a6fdb; }
+.rrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.rrow .lbl { min-width: 190px; font-weight: 700; }
+.rrow button.on { background: var(--green); color: #052; font-weight: 700; }
+.rrow button.on.forf { background: var(--red); color: #fff; }
+.rrow.dim { opacity: .4; pointer-events: none; }
+.rsum { margin: 14px 0; font-size: 1.2rem; }
+.rsum.err { color: var(--red); }

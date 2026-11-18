@@ -2,6 +2,7 @@
 // เก็บ URL/TOKEN ของ Apps Script ไว้เป็น Environment Variable จึงไม่ถูกส่งไปที่เบราว์เซอร์กรรมการ
 //   SHEET_URL = Web app URL ของ Apps Script (ลงท้ายด้วย /exec)
 //   TOKEN     = รหัสลับเดียวกับที่ตั้งใน Code.gs
+//   REF_PIN   = รหัสกรรมการ (ถ้าตั้ง เว็บจะขอรหัสนี้ก่อนเขียนชีต/บันทึกผล)
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -9,6 +10,7 @@ const path = require("path");
 const PORT = process.env.PORT || 8765;
 const SHEET_URL = process.env.SHEET_URL || "";
 const TOKEN = process.env.TOKEN || "";
+const REF_PIN = process.env.REF_PIN || "";   // รหัสกรรมการ (ไม่บังคับ แต่แนะนำ) ใช้ป้องกันการเขียนชีต
 
 // ไฟล์ที่เปิดให้ดาวน์โหลดได้ (ไม่รวม server.js, apps-script, .git)
 const STATIC = {
@@ -52,8 +54,11 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/tabs") return send(res, 200, await callSheet({ action: "tabs" }));
     if (req.method === "GET" && url.pathname === "/api/matches")
       return send(res, 200, await callSheet({ action: "matches", date: url.searchParams.get("date") || "" }));
-    if (req.method === "POST" && url.pathname === "/api/sync") {
+    if (req.method === "POST" && (url.pathname === "/api/sync" || url.pathname === "/api/result")) {
+      if (REF_PIN && req.headers["x-pin"] !== REF_PIN) return send(res, 200, { ok: false, error: "pin" });
       const b = JSON.parse(await readBody(req));
+      if (url.pathname === "/api/result")
+        return send(res, 200, await callSheet(null, { action: "result", date: b.date, match: b.match, maps: b.maps, forfeit: b.forfeit }));
       // ส่งต่อเฉพาะข้อมูลที่จำเป็น
       return send(res, 200, await callSheet(null, { date: b.date, match: b.match, maps: b.maps }));
     }

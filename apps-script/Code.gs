@@ -7,6 +7,11 @@
  *   ลำดับ     แถว h+1 (map1, map2, map3)
  *   ทีมเจ้าของ แถว h+2 (ทีมที่เลือกแมพนั้น)
  *   ฝั่ง       แถว h+3 (ฝั่งของทีมเจ้าของ: ATK / DEF)
+ *
+ * ส่วนผลการแข่ง (t = แถวชื่อทีม, คอลัมน์ C = ทีมแรก, G = ทีมที่สอง):
+ *   แถว bo1, bo2, bo3 (ตามป้ายคอลัมน์ A)  แมพ 1/2/3 ใส่ 1 = ชนะ, 0 = แพ้ ที่คอลัมน์ B/C/D (ทีมแรก) และ F/G/H (ทีมที่สอง)
+ *   สละสิทธิ์: ฝั่งชนะเขียน "ชนะ by" ฝั่งสละสิทธิ์เขียน "สละสิทธิ์" ที่คอลัมน์ C/G ทั้ง 3 แถว
+ *   แถว "คะแนนที่ได้" คอลัมน์ C/G: ชนะ 2-0 หรือสละสิทธิ์ = 3:0, ชนะ 2-1 = 2:1
  */
 
 // เปลี่ยนค่านี้ก่อน Deploy แล้วใส่ค่าเดียวกันในหน้าเว็บ
@@ -44,7 +49,8 @@ function findBlocks_(v) {
       id, group,
       teamA: clean_(v[teamRow][COL_TEAM1 - 1]),
       teamB: clean_(v[teamRow][COL_TEAM2 - 1]),
-      headerRow: r + 1,            // แถวชื่อแมพ (เลขแถวใน Sheet เริ่มที่ 1)
+      teamRow: teamRow + 1,        // แถวชื่อทีม (เลขแถวใน Sheet เริ่มที่ 1)
+      headerRow: r + 1,            // แถวชื่อแมพ
       maps: names,
     });
   }
@@ -83,10 +89,63 @@ function readBlocks_(sheet) {
   blocks.forEach((b) => {
     const rng = sheet.getRange(b.headerRow, COL_MAP_FIRST, 4, MAP_COUNT);
     const bg = rng.getBackgrounds()[0], vals = rng.getValues();
+    // แมพที่เล่น (ลำดับ map1..map3 ที่เว็บเขียนไว้ใต้ชื่อแมพ) ใช้แสดงในหน้าบันทึกผล
+    b.played = vals[1].map((x, i) => ({ order: Number(String(x).replace(/\D/g, '')), name: b.maps[i] }))
+      .filter((p) => p.order > 0).sort((p, q) => p.order - q.order);
     b.used = bg.some((c) => c === RED || c === GREEN) ||
       [1, 2, 3].some((r) => vals[r].some((x) => String(x).trim() !== ''));
   });
   return blocks;
+}
+
+/**
+ * วางแผนการเขียนผลการแข่ง (ไม่แตะ Sheet จึงทดสอบได้)
+ * v = ค่าทั้งแท็บ, block = แมตช์จาก findBlocks_, res = { maps:[null|0|1 x3], forfeit:null|0|1 }
+ * maps[n] = ทีมที่ชนะแมพ n+1 (0 = ทีมแรก/ซ้าย, 1 = ทีมที่สอง/ขวา, null = ไม่ได้เล่น)
+ * forfeit = ทีมที่สละสิทธิ์ (0/1) หรือ null; คืนรายการ {row, col, value}
+ */
+function planResult_(v, block, res) {
+  const bo = {};
+  let scoreRow = 0;
+  for (let r = block.teamRow + 1; r <= block.teamRow + 8 && r <= v.length; r++) {
+    const a = String(v[r - 1][0] || '').trim().toLowerCase();
+    if (/^bo[123]$/.test(a)) bo[a] = r;
+    if (a === 'คะแนนที่ได้') scoreRow = r;
+  }
+  if (!bo.bo1 || !bo.bo2 || !bo.bo3 || !scoreRow) throw new Error('หาแถว bo1-bo3/คะแนนที่ได้ ของแมตช์นี้ไม่เจอ');
+
+  const maps = (res.maps || [null, null, null]).slice(0, 3);
+  const forfeit = res.forfeit === 0 || res.forfeit === 1 ? res.forfeit : null;
+  const L = [2, 3, 4], R = [6, 7, 8];            // คอลัมน์ผลแต่ละแมพของทีมซ้าย/ขวา
+  const SC = [3, 7];                              // คอลัมน์คะแนน/ข้อความสละสิทธิ์ของทีมซ้าย/ขวา
+
+  // คะแนนที่ได้
+  let pts = null;
+  if (forfeit !== null) {
+    pts = forfeit === 0 ? [0, 3] : [3, 0];
+  } else {
+    const w = [0, 1].map((t) => maps.filter((m) => m === t).length);
+    if (w[0] > 2 || w[1] > 2) throw new Error('ชนะได้ไม่เกิน 2 แมพ');
+    if (w[0] === 2) pts = w[1] === 0 ? [3, 0] : [2, 1];
+    else if (w[1] === 2) pts = w[0] === 0 ? [0, 3] : [1, 2];
+    else pts = null;                              // ยังไม่มีทีมชนะครบ 2 แมพ
+  }
+
+  const out = [];
+  ['bo1', 'bo2', 'bo3'].forEach((k, n) => {
+    const row = bo[k];
+    L.concat(R).forEach((c) => out.push({ row, col: c, value: '' }));      // ล้างช่องผลของแถวนี้ก่อน
+    if (forfeit !== null) {
+      out.push({ row, col: SC[1 - forfeit], value: 'ชนะ by' });
+      out.push({ row, col: SC[forfeit], value: 'สละสิทธิ์' });
+    } else if (maps[n] === 0 || maps[n] === 1) {
+      out.push({ row, col: L[n], value: maps[n] === 0 ? 1 : 0 });
+      out.push({ row, col: R[n], value: maps[n] === 1 ? 1 : 0 });
+    }
+  });
+  out.push({ row: scoreRow, col: SC[0], value: pts ? pts[0] : '' });
+  out.push({ row: scoreRow, col: SC[1], value: pts ? pts[1] : '' });
+  return out;
 }
 
 function json_(obj) {
@@ -113,7 +172,11 @@ function doGet(e) {
   }
 }
 
-/** body (text/plain JSON): { token, date, match, maps:[{name,status,order,owner,side}] } */
+/**
+ * body (text/plain JSON):
+ *   ban/pick:  { token, date, match, maps:[{name,status,order,owner,side}] }
+ *   ผลการแข่ง: { token, action:'result', date, match, maps:[null|0|1 x3], forfeit:null|0|1 }
+ */
 function doPost(e) {
   const lock = LockService.getScriptLock();
   try {
@@ -124,7 +187,13 @@ function doPost(e) {
     if (!sheet) return json_({ ok: false, error: 'no tab ' + body.date });
     const block = readBlocks_(sheet).filter((b) => b.id === body.match)[0];
     if (!block) return json_({ ok: false, error: 'no match ' + body.match });
-    applyBlock_(sheet, block, body.maps || []);
+    if (body.action === 'result') {
+      const lastRow = Math.max(sheet.getLastRow(), 1);
+      const v = sheet.getRange(1, 1, lastRow, 16).getValues();
+      planResult_(v, block, body).forEach((w) => sheet.getRange(w.row, w.col).setValue(w.value));
+    } else {
+      applyBlock_(sheet, block, body.maps || []);
+    }
     SpreadsheetApp.flush();
     return json_({ ok: true });
   } catch (err) {
@@ -135,4 +204,4 @@ function doPost(e) {
 }
 
 // ให้ทดสอบใน Node ได้ (ไม่มีผลใน Apps Script)
-if (typeof module !== 'undefined') module.exports = { findBlocks_, planWrites_ };
+if (typeof module !== 'undefined') module.exports = { findBlocks_, planWrites_, planResult_ };
