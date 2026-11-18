@@ -122,3 +122,9 @@ button.alt { background: #2a6fdb; }
 @keyframes slidein { to { opacity: 1; transform: none; } }
 @keyframes grow { to { width: var(--w); } }
 .st-gname { font-size: 1.6rem; font-weight: 900; color: var(--red); letter-spacing: 4px; margin: 2px 0 4px 4px; }
+.st-row.out { background: rgba(255,70,85,.12); }
+.st-row.out .bar { display: none; }
+.st-row.out .nm { color: #ff6b78; text-decoration: line-through; text-decoration-color: var(--red); text-decoration-thickness: 2px; }
+.st-row.out .rk, .st-row.out .pt { color: #8b97a3; }
+.st-row.out .pt { text-decoration: line-through; text-decoration-color: var(--red); }
+.outtag { display: inline-block; text-decoration: none; margin-left: 8px; padding: 1px 8px; font-size: .7rem; font-weight: 800; letter-spacing: 1px; background: var(--red); color: #fff; vertical-align: middle; }

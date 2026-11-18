@@ -180,18 +180,25 @@ function planResult_(v, block, res) {
 /**
  * อ่านตารางคะแนนรวมจากแท็บ "รวมคะแนน" (คอลัมน์ A = ทีม, B = คะแนน)
  * หัวกลุ่มคือแถวที่ขึ้นต้นด้วย "ทีมสาย" เช่น "ทีมสาย A" และแต่ละกลุ่มจบที่แถวว่าง
+ * ทีมที่ชื่อถูกระบายสีแดงในชีต (สละสิทธิ์) จะมี out: true
  * ถ้าหัวกลุ่มหายไป (เช่น เซลล์ถูกลบ) แถวทีมที่ตามมาก็ยังถูกนับเป็นกลุ่มหนึ่ง
  */
-function parseStandings_(v) {
+function isRed_(hex) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  return !!m && parseInt(m[1], 16) >= 200 && parseInt(m[2], 16) <= 90 && parseInt(m[3], 16) <= 90;
+}
+
+function parseStandings_(v, bg) {
   const groups = [];
   let cur = null;
-  v.forEach((row) => {
+  v.forEach((row, i) => {
     const a = clean_(row[0]);
     const m = a.match(/^ทีมสาย\s*(.+)$/);
     if (m) { cur = { name: m[1], teams: [] }; groups.push(cur); return; }
     if (!a) { cur = null; return; }
     if (!cur) { cur = { name: String.fromCharCode(65 + groups.length), teams: [] }; groups.push(cur); }   // กลุ่มที่หัว "ทีมสาย ..." ถูกลบ/ว่าง ยังนับทีมให้
-    cur.teams.push({ team: a, score: Number(row[1]) || 0 });
+    // ทีมที่สละสิทธิ์/ตกรอบ: ชีตระบายสีแดงที่ชื่อทีม (คอลัมน์ A) -> out = true
+    cur.teams.push({ team: a, score: Number(row[1]) || 0, out: !!bg && isRed_(bg[i] && bg[i][0]) });
   });
   return groups;
 }
@@ -212,7 +219,8 @@ function doGet(e) {
     if (p.action === 'standings') {
       const sh = ss.getSheetByName('รวมคะแนน');
       if (!sh) return json_({ ok: false, error: 'no tab รวมคะแนน' });
-      return json_({ ok: true, groups: parseStandings_(sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 2).getValues()) });
+      const rng = sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 2);
+      return json_({ ok: true, groups: parseStandings_(rng.getValues(), rng.getBackgrounds()) });
     }
     if (p.action === 'matches') {
       const sheet = ss.getSheetByName(p.date);

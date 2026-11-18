@@ -347,12 +347,13 @@ function renderStandings(groups, opt) {
   // แยกตามสาย: แต่ละสายเรียงคะแนนมากไปน้อยของตัวเอง (เสมอกันคงลำดับเดิม)
   const html = groups.map((g, gi) => {
     const label = /^\d+$/.test(g.name) ? String.fromCharCode(65 + gi) : g.name;   // Apps Script เวอร์ชันเก่าตั้งชื่อกลุ่มที่หัวหายเป็นเลข -> ใช้ตัวอักษรแทน
-    const teams = g.teams.slice().sort((a, b) => b.score - a.score);
-    const rows = teams.map((t, i) => {
-      const rank = teams.findIndex((x) => x.score === t.score) + 1;     // คะแนนเท่ากัน = อันดับเท่ากัน
-      return `<div class="st-row${rank === 1 ? " top" : ""}${hl.includes(normName(t.team)) ? " hl" : ""}" style="--i:${i};--w:${Math.round((t.score / max) * 100)}%">
-        <div class="bar"></div><div class="rk">${rank}</div><div class="nm">${esc(t.team)}</div><div class="pt">${t.score}</div></div>`;
-    }).join("");
+    // ทีมที่สละสิทธิ์ (ชีตระบายสีแดง) ไปอยู่ล่างสุด ไม่นับอันดับ ส่วนทีมที่เหลือเรียงคะแนนมากไปน้อย
+    const active = g.teams.filter((t) => !t.out).sort((a, b) => b.score - a.score);
+    const out = g.teams.filter((t) => t.out);
+    const row = (t, i, rank) => `<div class="st-row${t.out ? " out" : rank === 1 ? " top" : ""}${hl.includes(normName(t.team)) ? " hl" : ""}" style="--i:${i};--w:${Math.round((t.score / max) * 100)}%">
+        <div class="bar"></div><div class="rk">${t.out ? "—" : rank}</div><div class="nm">${esc(t.team)}${t.out ? ` <span class="outtag">สละสิทธิ์</span>` : ""}</div><div class="pt">${t.score}</div></div>`;
+    const rows = active.map((t, i) => row(t, i, active.findIndex((x) => x.score === t.score) + 1)).join("")   // คะแนนเท่ากัน = อันดับเท่ากัน
+      + out.map((t, i) => row(t, active.length + i, 0)).join("");
     return `<div class="st-group"><div class="st-gname">${esc(label)}</div>${rows}</div>`;
   }).join("");
   $("standings").innerHTML = `
