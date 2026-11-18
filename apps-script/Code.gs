@@ -180,6 +180,7 @@ function planResult_(v, block, res) {
 /**
  * อ่านตารางคะแนนรวมจากแท็บ "รวมคะแนน" (คอลัมน์ A = ทีม, B = คะแนน)
  * หัวกลุ่มคือแถวที่ขึ้นต้นด้วย "ทีมสาย" เช่น "ทีมสาย A" และแต่ละกลุ่มจบที่แถวว่าง
+ * ถ้าหัวกลุ่มหายไป (เช่น เซลล์ถูกลบ) แถวทีมที่ตามมาก็ยังถูกนับเป็นกลุ่มหนึ่ง
  */
 function parseStandings_(v) {
   const groups = [];
@@ -189,7 +190,8 @@ function parseStandings_(v) {
     const m = a.match(/^ทีมสาย\s*(.+)$/);
     if (m) { cur = { name: m[1], teams: [] }; groups.push(cur); return; }
     if (!a) { cur = null; return; }
-    if (cur) cur.teams.push({ team: a, score: Number(row[1]) || 0 });
+    if (!cur) { cur = { name: String(groups.length + 1), teams: [] }; groups.push(cur); }   // กลุ่มที่หัว "ทีมสาย ..." ถูกลบ/ว่าง ยังนับทีมให้
+    cur.teams.push({ team: a, score: Number(row[1]) || 0 });
   });
   return groups;
 }
