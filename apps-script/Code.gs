@@ -84,7 +84,8 @@ function applyBlock_(sheet, block, maps) {
 
 function readBlocks_(sheet) {
   const lastRow = Math.max(sheet.getLastRow(), 1);
-  const blocks = findBlocks_(sheet.getRange(1, 1, lastRow, 16).getValues());
+  const v = sheet.getRange(1, 1, lastRow, 16).getValues();
+  const blocks = findBlocks_(v);
   // ทำเครื่องหมายแมตช์ที่มีข้อมูลแมพอยู่แล้ว (สีแดง/เขียว หรือมีลำดับ/ทีมเจ้าของ) เพื่อเตือนกรรมการก่อนเขียนทับ
   blocks.forEach((b) => {
     const rng = sheet.getRange(b.headerRow, COL_MAP_FIRST, 4, MAP_COUNT);
@@ -92,10 +93,45 @@ function readBlocks_(sheet) {
     // แมพที่เล่น (ลำดับ map1..map3 ที่เว็บเขียนไว้ใต้ชื่อแมพ) ใช้แสดงในหน้าบันทึกผล
     b.played = vals[1].map((x, i) => ({ order: Number(String(x).replace(/\D/g, '')), name: b.maps[i] }))
       .filter((p) => p.order > 0).sort((p, q) => p.order - q.order);
+    try { b.result = parseResult_(v, b); } catch (err) { b.result = null; }   // ผลที่กรอกไว้แล้ว (ให้เว็บแสดงสถานะ/แก้ต่อ)
     b.used = bg.some((c) => c === RED || c === GREEN) ||
       [1, 2, 3].some((r) => vals[r].some((x) => String(x).trim() !== ''));
   });
   return blocks;
+}
+
+/** หาเลขแถว bo1-bo3 และ "คะแนนที่ได้" ของแมตช์ (ค้นจากป้ายคอลัมน์ A ใต้แถวชื่อทีม) */
+function findResultRows_(v, block) {
+  const bo = {};
+  let scoreRow = 0;
+  for (let r = block.teamRow + 1; r <= block.teamRow + 8 && r <= v.length; r++) {
+    const a = String(v[r - 1][0] || '').trim().toLowerCase();
+    if (/^bo[123]$/.test(a)) bo[a] = r;
+    if (a === 'คะแนนที่ได้') scoreRow = r;
+  }
+  if (!bo.bo1 || !bo.bo2 || !bo.bo3 || !scoreRow) throw new Error('หาแถว bo1-bo3/คะแนนที่ได้ ของแมตช์นี้ไม่เจอ');
+  return { bo, scoreRow };
+}
+
+/**
+ * อ่านผลที่มีอยู่ในชีตกลับมา: { maps:[null|0|1 x3], forfeit:null|0|1, pts:[a,b]|null }
+ * (รูปแบบเดียวกับที่ planResult_ รับเข้า เพื่อให้หน้าเว็บแก้ต่อได้)
+ */
+function parseResult_(v, block) {
+  const { bo, scoreRow } = findResultRows_(v, block);
+  const L = [2, 3, 4], R = [6, 7, 8], SC = [3, 7];
+  const isOne = (x) => x !== '' && Number(x) === 1;
+  const maps = [null, null, null];
+  let forfeit = null;
+  ['bo1', 'bo2', 'bo3'].forEach((k, n) => {
+    const row = v[bo[k] - 1];
+    SC.forEach((c, t) => { if (String(row[c - 1]).trim() === 'สละสิทธิ์') forfeit = t; });
+    if (isOne(row[L[n] - 1])) maps[n] = 0; else if (isOne(row[R[n] - 1])) maps[n] = 1;
+  });
+  const sr = v[scoreRow - 1];
+  const num = (x) => (x === '' || x === null ? null : Number(x));
+  const a = num(sr[SC[0] - 1]), b = num(sr[SC[1] - 1]);
+  return { maps, forfeit, pts: a === null && b === null ? null : [a || 0, b || 0] };
 }
 
 /**
@@ -105,14 +141,7 @@ function readBlocks_(sheet) {
  * forfeit = ทีมที่สละสิทธิ์ (0/1) หรือ null; คืนรายการ {row, col, value}
  */
 function planResult_(v, block, res) {
-  const bo = {};
-  let scoreRow = 0;
-  for (let r = block.teamRow + 1; r <= block.teamRow + 8 && r <= v.length; r++) {
-    const a = String(v[r - 1][0] || '').trim().toLowerCase();
-    if (/^bo[123]$/.test(a)) bo[a] = r;
-    if (a === 'คะแนนที่ได้') scoreRow = r;
-  }
-  if (!bo.bo1 || !bo.bo2 || !bo.bo3 || !scoreRow) throw new Error('หาแถว bo1-bo3/คะแนนที่ได้ ของแมตช์นี้ไม่เจอ');
+  const { bo, scoreRow } = findResultRows_(v, block);
 
   const maps = (res.maps || [null, null, null]).slice(0, 3);
   const forfeit = res.forfeit === 0 || res.forfeit === 1 ? res.forfeit : null;
@@ -148,6 +177,23 @@ function planResult_(v, block, res) {
   return out;
 }
 
+/**
+ * อ่านตารางคะแนนรวมจากแท็บ "รวมคะแนน" (คอลัมน์ A = ทีม, B = คะแนน)
+ * หัวกลุ่มคือแถวที่ขึ้นต้นด้วย "ทีมสาย" เช่น "ทีมสาย A" และแต่ละกลุ่มจบที่แถวว่าง
+ */
+function parseStandings_(v) {
+  const groups = [];
+  let cur = null;
+  v.forEach((row) => {
+    const a = clean_(row[0]);
+    const m = a.match(/^ทีมสาย\s*(.+)$/);
+    if (m) { cur = { name: m[1], teams: [] }; groups.push(cur); return; }
+    if (!a) { cur = null; return; }
+    if (cur) cur.teams.push({ team: a, score: Number(row[1]) || 0 });
+  });
+  return groups;
+}
+
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -160,6 +206,11 @@ function doGet(e) {
     if (p.action === 'tabs') {
       const tabs = ss.getSheets().map((s) => s.getName()).filter((n) => SKIP_TABS.indexOf(n) < 0);
       return json_({ ok: true, tabs });
+    }
+    if (p.action === 'standings') {
+      const sh = ss.getSheetByName('รวมคะแนน');
+      if (!sh) return json_({ ok: false, error: 'no tab รวมคะแนน' });
+      return json_({ ok: true, groups: parseStandings_(sh.getRange(1, 1, Math.max(sh.getLastRow(), 1), 2).getValues()) });
     }
     if (p.action === 'matches') {
       const sheet = ss.getSheetByName(p.date);
@@ -204,4 +255,4 @@ function doPost(e) {
 }
 
 // ให้ทดสอบใน Node ได้ (ไม่มีผลใน Apps Script)
-if (typeof module !== 'undefined') module.exports = { findBlocks_, planWrites_, planResult_ };
+if (typeof module !== 'undefined') module.exports = { findBlocks_, planWrites_, planResult_, parseStandings_, parseResult_ };

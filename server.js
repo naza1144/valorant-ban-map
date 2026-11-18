@@ -51,6 +51,7 @@ const server = http.createServer(async (req, res) => {
   res.on("finish", () => console.log(req.method, url.pathname, res.statusCode));
   try {
     if (req.method === "GET" && url.pathname === "/healthz") { res.writeHead(200, { "Content-Type": "text/plain" }); return res.end("ok"); }
+    if (req.method === "GET" && url.pathname === "/api/standings") return send(res, 200, await callSheet({ action: "standings" }));
     if (req.method === "GET" && url.pathname === "/api/tabs") return send(res, 200, await callSheet({ action: "tabs" }));
     if (req.method === "GET" && url.pathname === "/api/matches")
       return send(res, 200, await callSheet({ action: "matches", date: url.searchParams.get("date") || "" }));

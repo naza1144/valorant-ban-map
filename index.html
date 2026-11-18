@@ -29,12 +29,14 @@
     <div class="row">
       <button id="startBtn" class="primary">เริ่ม Ban/Pick</button>
       <button id="resultBtn" class="primary alt" type="button">บันทึกผลการแข่ง</button>
+      <button id="standingsBtn" type="button">ดูคะแนนรวม</button>
     </div>
   </section>
 
   <section id="game" class="hidden">
     <div id="status" class="status"></div>
     <div id="maps" class="maps"></div>
+    <div id="summary" class="summary hidden"></div>
     <div class="controls">
       <button id="undoBtn">↶ ย้อนกลับ</button>
       <button id="resetBtn">⟲ เริ่มใหม่</button>
@@ -46,6 +48,8 @@
   <section id="resultView" class="panel hidden">
     <div id="resultBody"></div>
   </section>
+
+  <section id="standings" class="hidden"></section>
 
   <script src="app.js"></script>
 </body>
