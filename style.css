@@ -104,7 +104,7 @@ button.alt { background: #2a6fdb; }
 .st-title { font-size: clamp(1.6rem, 4vw, 2.6rem); font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 30px rgba(255,70,85,.35); }
 .st-title span { color: var(--red); }
 .st-sub { color: var(--muted); letter-spacing: 4px; font-size: .8rem; margin-top: 6px; }
-.st-groups { max-width: 760px; margin: 0 auto; }
+.st-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 22px; }
 .st-group { background: var(--panel); border-radius: 10px; padding: 8px 18px 16px; border-top: 4px solid var(--red); box-shadow: 0 10px 30px rgba(0,0,0,.45); }
 .st-group h3 { margin: 0 0 12px; letter-spacing: 5px; }
 .st-row { position: relative; display: grid; grid-template-columns: 34px 1fr 44px; align-items: center; gap: 10px; padding: 9px 10px; margin-top: 6px; overflow: hidden; background: rgba(0,0,0,.25);
@@ -121,3 +121,4 @@ button.alt { background: #2a6fdb; }
 .st-actions { display: flex; gap: 12px; justify-content: center; margin: 26px 0; animation: fade 1s ease 1.4s both; }
 @keyframes slidein { to { opacity: 1; transform: none; } }
 @keyframes grow { to { width: var(--w); } }
+.st-gname { font-size: 1.6rem; font-weight: 900; color: var(--red); letter-spacing: 4px; margin: 2px 0 4px 4px; }

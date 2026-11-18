@@ -344,14 +344,16 @@ function closeStandings() {
 function renderStandings(groups, opt) {
   const hl = (opt.highlight || []).map(normName);
   const max = Math.max(1, ...groups.flatMap((g) => g.teams.map((t) => t.score)));
-  // รวมทั้งสองสายเป็นตารางเดียว เรียงจากคะแนนมากไปน้อย (เสมอกันคงลำดับเดิม)
-  const teams = groups.flatMap((g) => g.teams).sort((a, b) => b.score - a.score);
-  const rows = teams.map((t, i) => {
-    const rank = teams.findIndex((x) => x.score === t.score) + 1;     // คะแนนเท่ากัน = อันดับเท่ากัน
-    return `<div class="st-row${rank === 1 ? " top" : ""}${hl.includes(normName(t.team)) ? " hl" : ""}" style="--i:${i};--w:${Math.round((t.score / max) * 100)}%">
-      <div class="bar"></div><div class="rk">${rank}</div><div class="nm">${esc(t.team)}</div><div class="pt">${t.score}</div></div>`;
+  // แยกตามสาย: แต่ละสายเรียงคะแนนมากไปน้อยของตัวเอง (เสมอกันคงลำดับเดิม)
+  const html = groups.map((g) => {
+    const teams = g.teams.slice().sort((a, b) => b.score - a.score);
+    const rows = teams.map((t, i) => {
+      const rank = teams.findIndex((x) => x.score === t.score) + 1;     // คะแนนเท่ากัน = อันดับเท่ากัน
+      return `<div class="st-row${rank === 1 ? " top" : ""}${hl.includes(normName(t.team)) ? " hl" : ""}" style="--i:${i};--w:${Math.round((t.score / max) * 100)}%">
+        <div class="bar"></div><div class="rk">${rank}</div><div class="nm">${esc(t.team)}</div><div class="pt">${t.score}</div></div>`;
+    }).join("");
+    return `<div class="st-group"><div class="st-gname">${esc(g.name)}</div>${rows}</div>`;
   }).join("");
-  const html = `<div class="st-group">${rows}</div>`;
   $("standings").innerHTML = `
     <div class="st-head"><div class="st-title">คะแนน<span>รวม</span></div><div class="st-sub">UVC 2026 · STANDINGS</div></div>
     <div class="st-groups">${html}</div>

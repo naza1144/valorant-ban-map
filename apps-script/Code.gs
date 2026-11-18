@@ -190,7 +190,7 @@ function parseStandings_(v) {
     const m = a.match(/^ทีมสาย\s*(.+)$/);
     if (m) { cur = { name: m[1], teams: [] }; groups.push(cur); return; }
     if (!a) { cur = null; return; }
-    if (!cur) { cur = { name: String(groups.length + 1), teams: [] }; groups.push(cur); }   // กลุ่มที่หัว "ทีมสาย ..." ถูกลบ/ว่าง ยังนับทีมให้
+    if (!cur) { cur = { name: String.fromCharCode(65 + groups.length), teams: [] }; groups.push(cur); }   // กลุ่มที่หัว "ทีมสาย ..." ถูกลบ/ว่าง ยังนับทีมให้
     cur.teams.push({ team: a, score: Number(row[1]) || 0 });
   });
   return groups;
